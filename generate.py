@@ -4,6 +4,7 @@ import os
 import cv2
 import h5py
 import shutil
+import png
 
 """
 This is the main script to generate all the images with BlenderProc
@@ -33,12 +34,14 @@ def get_path_and_length(file, filepaths, diag_length):
 
 # Create the output path for each object
 def create_output_path(filepath, output_folder):
-    obj_name = filepath.split("/")[2]
+    obj_name = filepath.split("/")[-2]
     out_parent = os.path.join(output_folder, obj_name)
     out_colour = os.path.join(out_parent, "colour")
     out_depth = os.path.join(out_parent, "depth")
     out_mask = os.path.join(out_parent, "mask")
     out_matrix = os.path.join(out_parent, "matrix")
+    if os.path.exists(output_folder)==False:
+        os.mkdir(output_folder)
 
     if os.path.exists(out_parent):
         shutil.rmtree(out_parent, onerror=handler)
@@ -77,7 +80,7 @@ def render(obj_path, pos_file, parent_path, colour_path, depth_path, mask_path, 
     light = bproc.types.Light()
 
     # define the camera resolution
-    bproc.camera.set_resolution(480, 480)
+    bproc.camera.set_resolution(640, 480)
 
     # locate object center
     # poi = bproc.object.compute_poi(objs)
@@ -96,9 +99,6 @@ def render(obj_path, pos_file, parent_path, colour_path, depth_path, mask_path, 
         for num, line in enumerate(f.readlines()):
 
             location = [float(x) for x in line.split()]
-            #  convert opencv coord to opengl coord
-            # location[1] = location[1] * -1
-            # location[2] = location[2] * -1
             # set light
             light.set_location(location)
             light.set_type("POINT")
@@ -121,12 +121,15 @@ def render(obj_path, pos_file, parent_path, colour_path, depth_path, mask_path, 
             with h5py.File(os.path.join(parent_path, str(num),'0.hdf5'),'r') as h5f:
                     colours = np.array(h5f["colors"])[...,::-1].copy()
                     cv2.imwrite(os.path.join(colour_path, f'colour_img_{num}.jpg'),colours)
-                    with open(os.path.join(depth_path, f'depth_{num}'), 'wb') as dat:
-                            savearr = np.array(h5f["depth"])
-                            np.save(dat, savearr)
-                    with open(os.path.join(mask_path, f'mask_{num}'), 'wb') as dat:
-                            savearr = np.array(h5f["depth"]) < 100
-                            np.save(dat, savearr)
+                    with open(os.path.join(depth_path, f'depth_{num}.png'), 'wb') as im:
+                            float_arr = np.array(h5f["depth"])
+                            mask = np.array(h5f["depth"]) < 100
+                            int_arr = float_arr*mask*10000
+                            writer = png.Writer(width=640, height=480, bitdepth=16, greyscale=True)
+                            writer.write(im, int_arr.astype(np.int16))
+                    # with open(os.path.join(mask_path, f'mask_{num}'), 'wb') as dat:
+                            # savearr = np.array(h5f["depth"]) < 100
+                            # np.save(dat, savearr)
                     with open(os.path.join(matrix_path, f'matrix_{num}'), 'wb') as dat:
                             np.save(dat, cam2world_matrix)
             shutil.rmtree(os.path.join(parent_path, str(num)))
@@ -140,7 +143,7 @@ if __name__ == "__main__":
     count = 0
 
     for obj_path, length in zip(filepaths, diag_length):
-        parent_path, colour_path, depth_path, mask_path, matrix_path = create_output_path(obj_path, output_folder="./output")
+        parent_path, colour_path, depth_path, mask_path, matrix_path = create_output_path(obj_path, output_folder="/data/Wanqing/YCB_objects")
         pos_file = sample_points(parent_path, radius=length*3, sample=400)
         count = render(obj_path, pos_file, parent_path, colour_path, depth_path, mask_path,matrix_path, count)
 

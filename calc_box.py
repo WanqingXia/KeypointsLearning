@@ -18,7 +18,7 @@ class File(object):
     count = 0
     filepaths = []
     def get_file_paths(self, base_path):
-        folders = os.listdir(base_path)
+        folders = sorted(os.listdir(base_path))
         for folder in folders:
             folder_path = os.path.join(base_path, folder)
             files = os.listdir(folder_path)
@@ -79,7 +79,7 @@ class Normalize(object):
 
 if __name__ == "__main__":
     myFile = File()
-    basePath = "./models"
+    basePath = "/data/Wanqing/YCB_Video_Dataset/models"
     myFile.get_file_paths(basePath)
     myNormalize = Normalize()
 
