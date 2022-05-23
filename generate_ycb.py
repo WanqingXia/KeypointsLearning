@@ -16,6 +16,7 @@ import png
 
 def render(folder_name, model_paths, out_folder, count):
     bproc.init()
+    light = bproc.types.Light()
 
     # create output folder
     out_subfolder = os.path.join(out_folder,folder_name.split("/")[-1] )
@@ -33,10 +34,10 @@ def render(folder_name, model_paths, out_folder, count):
         mat = scipy.io.loadmat(name)
 
         # define a light and set its location and energy level
-        light = bproc.types.Light()
+        
         light.set_location(mat['rotation_translation_matrix'][:, 3].flatten())
         light.set_type("POINT")
-        light.set_energy(80)
+        light.set_energy(40)
 
         # load the objects into the scene
         if num == 0:

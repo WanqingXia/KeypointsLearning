@@ -3,7 +3,6 @@ import cv2
 import matplotlib.pyplot as plt
 import numpy as np
 from tqdm import tqdm
-import pickle
 import open3d as o3d
 
 def calc_angels(object_folder, position_file, neighbour_file):
