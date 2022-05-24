@@ -59,8 +59,7 @@ for match in matches:
 
 template_image = cv2.cvtColor(cv2.imread(color_r), cv2.COLOR_BGR2RGB)
 target_image = cv2.cvtColor(cv2.imread(color_f), cv2.COLOR_BGR2RGB)
-outimage = np.zeros((2000, 2000, 3))
-results = cv2.drawMatches(template_image, keypoints_r, target_image, keypoints_f, matches_f, target_image, flags=2)
+results = cv2.drawMatches(template_image, keypoints_r, target_image, keypoints_f, matches_f, None, flags=2)
 plt.imshow(results)
 plt.show()
 

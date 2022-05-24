@@ -21,6 +21,8 @@ def render(folder_name, model_paths, out_folder, count):
     # create output folder
     out_subfolder = os.path.join(out_folder,folder_name.split("/")[-1] )
     if os.path.exists(out_subfolder):
+        # return a number to protect generated contents
+        return 1
         shutil.rmtree(out_subfolder)
     os.mkdir(out_subfolder)
 
