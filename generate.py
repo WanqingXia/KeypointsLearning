@@ -56,7 +56,7 @@ def create_output_path(filepath, output_folder):
 # Sample camera points and save to txt
 def sample_points(path, radius, sample):
     points = [[0, 0, 0] for _ in range(sample)]
-    for n in range(sample):
+    for n in range(sample):formula
         phi = np.arccos(-1.0 + (2.0 * (n + 1) - 1.0) / sample)
         theta = np.sqrt(sample * np.pi) * phi
         points[n][0] = radius * np.cos(theta) * np.sin(phi)
@@ -143,7 +143,7 @@ if __name__ == "__main__":
     count = 0
 
     for obj_path, length in zip(filepaths, diag_length):
-        parent_path, colour_path, depth_path, mask_path, matrix_path = create_output_path(obj_path, output_folder="/data/Wanqing/YCB_objects")
+        parent_path, colour_path, depth_path, mask_path, matrix_path = create_output_path(obj_path, output_folder="/data/Wanqing/YCB_Video_Dataset/YCB_objects")
         pos_file = sample_points(parent_path, radius=length*3, sample=400)
         count = render(obj_path, pos_file, parent_path, colour_path, depth_path, mask_path,matrix_path, count)
 

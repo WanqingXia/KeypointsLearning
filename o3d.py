@@ -2,7 +2,10 @@ import open3d as o3d
 import time
 import numpy as np
 import os
+"""
+This code is currently not working, doesn't do anything
 
+"""
 mesh = o3d.io.read_triangle_mesh("./models/021_bleach_cleanser/textured.obj")
 
 pcd = o3d.geometry.PointCloud()
@@ -103,7 +106,7 @@ dp_points1 = np.delete(dp_points1, slice(num, 480*480), axis=0)
 # dp_points2 = np.delete(dp_points2, slice(num+1, 480*480), axis=0)
 #
 #
-# points_world1 = o3d.geometry.PointCloud()
+# points_world1 = o3d.geometry.PointCloud()= o3d.geometry.PointCloud()
 # points_world1.points = o3d.utility.Vector3dVector(points_3d1[:, 0:3])
 #
 # points_world2 = o3d.geometry.PointCloud()
