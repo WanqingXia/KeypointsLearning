@@ -1,0 +1,13 @@
+matplotlib
+numpy
+Pillow
+torch
+torchvision
+tqdm
+wandb
+pypng
+scipy
+h5py
+opencv-python
+opencv-contrib-python
+opencv-contrib-python-headless

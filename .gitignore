@@ -136,3 +136,5 @@ __pycache__
 .vscode
 output
 .idea/
+unet_keypoints/data
+unet_keypoints/scripts

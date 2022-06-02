@@ -4,7 +4,6 @@ import cv2
 import matplotlib.pyplot as plt
 from tqdm import tqdm
 from PIL import Image
-import scipy.io
 import glob
 
 
@@ -16,8 +15,8 @@ def label(folder_name, gen_folder_name, sift, fast, bf):
     for num, color_name in tqdm(enumerate(ori_color_files), desc="Calculating keypoints for" + folder_name, total=len(ori_color_files)):
         color_r = os.path.join(folder_name, color_name)
         color_f = os.path.join(gen_folder_name, gen_color_files[num])
-        depth_r = color_r.split("-")[0]+ "-depth.png"
-        depth_f = color_f.split("-")[0]+ "-depth.png"
+        depth_r = color_r.split("-")[0] + "-depth.png"
+        depth_f = color_f.split("-")[0] + "-depth.png"
         if color_r.split("/")[5:] != color_f.split("/")[5:] or depth_r.split("/")[5:] != depth_f.split("/")[5:]:
             raise Exception("File name not match! Program aborted.")
 
