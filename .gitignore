@@ -138,3 +138,7 @@ output
 .idea/
 unet_keypoints/data
 unet_keypoints/scripts
+unet_keypoints/wandb
+unet_keypoints/checkpoints
+INTERRUPTED.pth
+list.txt

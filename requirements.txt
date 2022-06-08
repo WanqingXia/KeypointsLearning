@@ -11,3 +11,5 @@ h5py
 opencv-python
 opencv-contrib-python
 opencv-contrib-python-headless
+# run the following code for RTX3090
+# pip3 install torch torchvision torchaudio --extra-index-url https://download.pytorch.org/whl/cu113
