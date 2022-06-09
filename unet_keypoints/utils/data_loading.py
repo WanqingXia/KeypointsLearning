@@ -20,16 +20,13 @@ def create_dataloader(ycb_dir, d_type, test_folders, val_percent=0,
     with torch_distributed_zero_first(rank):
         dataset = LoadImagesAndLabels(ycb_dir, d_type, test_folders)
     if sample_num == 0:
-        pass
+        sampler = None
     else:
         random_indices = torch.randperm(len(dataset))[:sample_num]
         random_samples = torch.utils.data.RandomSampler(random_indices)
+        sampler = random_samples
 
     batch_size = min(batch_size, len(dataset))
-    if sample_num == 0:
-        sampler = None
-    else:
-        sampler = random_samples
 
     if d_type == "train":
         n_val = int(len(dataset) * val_percent)
@@ -39,7 +36,7 @@ def create_dataloader(ycb_dir, d_type, test_folders, val_percent=0,
         train_dataloader = DataLoader(train_set,
                             batch_size=batch_size,
                             num_workers=num_workers,
-                            sampler=sampler,
+                            shuffle=True,
                             pin_memory=pin_memory,
                             collate_fn=LoadImagesAndLabels.collate_fn
                             )
@@ -56,6 +53,7 @@ def create_dataloader(ycb_dir, d_type, test_folders, val_percent=0,
                             batch_size=batch_size,
                             num_workers=num_workers,
                             pin_memory=pin_memory,
+                            sampler=sampler,
                             shuffle=False,
                             collate_fn=LoadImagesAndLabels.collate_fn
                             )
@@ -113,11 +111,11 @@ class LoadImagesAndLabels(Dataset):
         if file_type == 'color':
             data = np.array(Image.open(filename)).astype("uint8")
             data = (data.transpose((2, 0, 1))/255).astype(np.float32)
-            return data
+            return torch.as_tensor(data).float().contiguous()
         elif file_type == 'depth':
             data = np.array(Image.open(filename)).astype("uint16")
             data = (data/10000).astype(np.float32)
-            return data
+            return torch.as_tensor(data).float().contiguous()
         elif file_type == 'np':
             data = np.array(np.load(filename)).astype(np.float32)
             return data
@@ -143,11 +141,12 @@ class LoadImagesAndLabels(Dataset):
         gen_dep = self.load_process(gen_dep)
         label = self.load_process(label)
 
+        real_dep = real_dep[None, :, :]
+        gen_dep = gen_dep[None, :, :]
+
         return {
-            'real image': torch.as_tensor(real_img.copy()).float().contiguous(),
-            'real depth': torch.as_tensor(real_dep.copy()).float().contiguous(),
-            'generated image': torch.as_tensor(gen_img.copy()).float().contiguous(),
-            'generated depth': torch.as_tensor(gen_dep.copy()).float().contiguous(),
+            'real': torch.cat((real_img, real_dep), 0),
+            'gene': torch.cat((gen_img, gen_dep), 0)
         }, torch.from_numpy(label), self.real_dir / name, self.gen_dir / name
 
     @staticmethod

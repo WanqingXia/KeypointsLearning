@@ -4,10 +4,10 @@ from .unet_parts import *
 
 
 class UNet(nn.Module):
-    def __init__(self, n_channels, n_classes, bilinear=False):
+    def __init__(self, n_channels, n_descriptors, bilinear=False):
         super(UNet, self).__init__()
         self.n_channels = n_channels
-        self.n_classes = n_classes
+        self.n_descriptors = n_descriptors
         self.bilinear = bilinear
 
         self.inc = DoubleConv(n_channels, 64)
@@ -20,7 +20,8 @@ class UNet(nn.Module):
         self.up2 = Up(512, 256 // factor, bilinear)
         self.up3 = Up(256, 128 // factor, bilinear)
         self.up4 = Up(128, 64, bilinear)
-        self.outc = OutConv(64, n_classes)
+        # 1 + des since one channel is needed for probability
+        self.outc = OutConv(64, 1 + n_descriptors)
 
     def forward(self, x):
         x1 = self.inc(x)

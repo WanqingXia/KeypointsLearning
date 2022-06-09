@@ -2,5 +2,5 @@ import torch
 from torch import Tensor
 
 
-def keypoint_loss():
-    return 0
+def keypoint_loss(pred):
+    return 0.5
