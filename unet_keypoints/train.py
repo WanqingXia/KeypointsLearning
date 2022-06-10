@@ -93,11 +93,11 @@ def train_net(net,
 
                 with torch.cuda.amp.autocast(enabled=amp):
                     points_pred = net(images_T)
-                    # loss = keypoint_loss(points_pred)
+                    loss = keypoint_loss(points_pred, images_T, labels)
                     input = torch.randn(3, 5, requires_grad=True).to(device=device, dtype=torch.float32)
                     target = torch.randn(3, 5).to(device=device, dtype=torch.float32)
                     loss = l1loss(input, target)
-                # loss.requires_grad_(True)
+
                 # optimizer.zero_grad(set_to_none=True)
                 # grad_scaler.scale(loss).backward()
                 # grad_scaler.step(optimizer)
@@ -175,7 +175,7 @@ if __name__ == '__main__':
 
     logging.info(f'Network:\n'
                  f'\t{net.n_channels} input channels\n'
-                 f'\t{net.n_descriptors+1} output channels (descriptors)\n'
+                 f'\t{net.n_descriptors+1} output channels (detector + descriptors)\n'
                  f'\t{"Bilinear" if net.bilinear else "Transposed conv"} upscaling')
 
     if args.load:

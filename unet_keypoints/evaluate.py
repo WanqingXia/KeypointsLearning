@@ -9,35 +9,27 @@ from utils.calc_loss import keypoint_loss
 def evaluate(net, dataloader, device):
     net.eval()
     num_val_batches = len(dataloader)
-    dice_score = 0
+    score = 0
 
     # iterate over the validation set
     for batch in tqdm(dataloader, total=num_val_batches, desc='Validation round', unit='batch', leave=False):
-        image, mask_true = batch['image'], batch['mask']
-        # move images and labels to correct device and type
-        image = image.to(device=device, dtype=torch.float32)
-        mask_true = mask_true.to(device=device, dtype=torch.long)
-        mask_true = F.one_hot(mask_true, net.n_classes).permute(0, 3, 1, 2).float()
+        images = []
+        for item in batch[0]:
+            images.append(item.get('real'))
+            images.append(item.get('gene'))
+        images_T = torch.stack(images)
+        labels = batch[1]
+
+        images_T = images_T.to(device=device, dtype=torch.float32)
 
         with torch.no_grad():
             # predict the mask
-            points_pred = net(image)
-
-            # convert to one-hot format
-            if net.n_classes == 1:
-                points_pred = (F.sigmoid(points_pred) > 0.5).float()
-                # compute the Dice score
-                dice_score += keypoint_loss(points_pred)
-            else:
-                points_pred = F.one_hot(points_pred.argmax(dim=1), net.n_classes).permute(0, 3, 1, 2).float()
-                # compute the Dice score, ignoring background
-                dice_score += keypoint_loss(points_pred)
-
-           
+            points_pred = net(images_T)
+            score += keypoint_loss(points_pred, images_T, labels)
 
     net.train()
 
     # Fixes a potential division by zero error
     if num_val_batches == 0:
-        return dice_score
-    return dice_score / num_val_batches
+        return score
+    return score / num_val_batches
