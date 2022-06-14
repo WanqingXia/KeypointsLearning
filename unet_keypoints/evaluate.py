@@ -2,10 +2,9 @@ import torch
 import torch.nn.functional as F
 from tqdm import tqdm
 
-from utils.calc_loss import keypoint_loss
+from utils.calc_loss import keypoint_loss, keypoint_score
 
-#TODO: implement the evaluation function, gain points when matches are close and in object area
-
+#Calculates the evaluation score, the score is higher if more keypoint pairs are found and more closer to each other
 def evaluate(net, dataloader, device):
     net.eval()
     num_val_batches = len(dataloader)
@@ -25,7 +24,7 @@ def evaluate(net, dataloader, device):
         with torch.no_grad():
             # predict the mask
             points_pred = net(images_T)
-            score += keypoint_loss(points_pred, images_T, labels)
+            score += keypoint_score(points_pred, images_T, labels, device=device)
 
     net.train()
 

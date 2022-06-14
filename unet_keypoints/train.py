@@ -93,15 +93,12 @@ def train_net(net,
 
                 with torch.cuda.amp.autocast(enabled=amp):
                     points_pred = net(images_T)
-                    loss = keypoint_loss(points_pred, images_T, labels)
-                    input = torch.randn(3, 5, requires_grad=True).to(device=device, dtype=torch.float32)
-                    target = torch.randn(3, 5).to(device=device, dtype=torch.float32)
-                    loss = l1loss(input, target)
+                    loss = keypoint_loss(points_pred, images_T, labels, device=device)
 
-                # optimizer.zero_grad(set_to_none=True)
-                # grad_scaler.scale(loss).backward()
-                # grad_scaler.step(optimizer)
-                # grad_scaler.update()
+                optimizer.zero_grad(set_to_none=True)
+                grad_scaler.scale(loss).backward()
+                grad_scaler.step(optimizer)
+                grad_scaler.update()
 
                 pbar.update(1)
                 global_step += 1

@@ -142,3 +142,4 @@ unet_keypoints/wandb
 unet_keypoints/checkpoints
 INTERRUPTED.pth
 list.txt
+test.py
