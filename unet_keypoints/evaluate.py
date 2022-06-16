@@ -4,14 +4,16 @@ from tqdm import tqdm
 
 from utils.calc_loss import keypoint_loss, keypoint_score
 
-#Calculates the evaluation score, the score is higher if more keypoint pairs are found and more closer to each other
-def evaluate(net, dataloader, device):
+# Calculates the evaluation score, the score is higher if more keypoint pairs are found and more closer to each other
+
+
+def evaluate(net, dataloader, device, epoch, epochs):
     net.eval()
     num_val_batches = len(dataloader)
     score = 0
 
     # iterate over the validation set
-    for batch in tqdm(dataloader, total=num_val_batches, desc='Validation round', unit='batch', leave=False):
+    for i, batch in tqdm(enumerate(dataloader), total=num_val_batches, desc=f'Validation round {epoch}/{epochs}', unit='batch'):
         images = []
         for item in batch[0]:
             images.append(item.get('real'))

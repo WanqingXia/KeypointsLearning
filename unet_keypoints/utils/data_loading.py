@@ -14,50 +14,52 @@ import torch.distributed as dist
 from contextlib import contextmanager
 
 
-def create_dataloader(ycb_dir, d_type, test_folders, val_percent=0,
-                      batch_size=1, sample_num=0, rank=-1, num_workers=8, pin_memory=True):
+def create_dataloader(ycb_dir, d_type, test_folders, batch_size=1,
+                      sample_num=0, rank=-1, num_workers=8, pin_memory=True):
     # Make sure only the first process in DDP process the dataset first, and the following others can use the cache
     with torch_distributed_zero_first(rank):
         dataset = LoadImagesAndLabels(ycb_dir, d_type, test_folders)
-    if sample_num == 0:
-        sampler = None
-    else:
-        random_indices = torch.randperm(len(dataset))[:sample_num]
-        random_samples = torch.utils.data.RandomSampler(random_indices)
-        sampler = random_samples
-
-    batch_size = min(batch_size, len(dataset))
 
     if d_type == "train":
-        n_val = int(len(dataset) * val_percent)
-        n_train = len(dataset) - n_val
-        train_set, val_set = random_split(dataset, [n_train, n_val], generator=torch.Generator().manual_seed(0))
+        if sample_num == 0:
+            sampler = None
+        else:
+            random_indices = torch.randperm(len(dataset))[:sample_num]
+            random_samples = torch.utils.data.RandomSampler(random_indices)
+            sampler = random_samples
         # Use torch.utils.data.DataLoader()
-        train_dataloader = DataLoader(train_set,
+        train_dataloader = DataLoader(dataset,
                             batch_size=batch_size,
                             num_workers=num_workers,
-                            shuffle=True,
+                            sampler=sampler,
                             pin_memory=pin_memory,
-                            collate_fn=LoadImagesAndLabels.collate_fn
-                            )
-        val_dataloader = DataLoader(val_set,
+                            collate_fn=LoadImagesAndLabels.collate_fn)
+        return train_dataloader
+    elif d_type == "val":
+        if sample_num == 0:
+            sampler = None
+        else:
+            # using random seed to keep validation set always the same
+            g = torch.Generator()
+            g.manual_seed(10)
+            random_indices = torch.randperm(len(dataset), generator=g)[:sample_num]
+            random_samples = torch.utils.data.RandomSampler(random_indices)
+            sampler = random_samples
+        val_dataloader = DataLoader(dataset,
                             batch_size=batch_size,
                             num_workers=num_workers,
+                            sampler=sampler,
                             pin_memory=pin_memory,
-                            shuffle=False,
-                            collate_fn=LoadImagesAndLabels.collate_fn
-                            )
-        return train_dataloader, val_dataloader, train_set, val_set
+                            collate_fn=LoadImagesAndLabels.collate_fn)
+        return val_dataloader
     elif d_type == "test":
         test_dataloader = DataLoader(dataset,
                             batch_size=batch_size,
                             num_workers=num_workers,
                             pin_memory=pin_memory,
-                            sampler=sampler,
                             shuffle=False,
-                            collate_fn=LoadImagesAndLabels.collate_fn
-                            )
-        return test_dataloader, dataset
+                            collate_fn=LoadImagesAndLabels.collate_fn)
+        return test_dataloader
     else:
         raise RuntimeError('The dataset type can only be "train" or "test"')
 
@@ -77,7 +79,7 @@ class LoadImagesAndLabels(Dataset):
                 if self.type == "test":
                     if real_folder in test_folders:
                         self.fill_names(self.color_dir, self.label_dir, self.real_dir, real_folder, self.gen_dir)
-                elif self.type == "train":
+                elif self.type == "train" or self.type == "val":
                     if real_folder not in test_folders:
                         self.fill_names(self.color_dir, self.label_dir, self.real_dir, real_folder, self.gen_dir)
                 else:
@@ -88,8 +90,8 @@ class LoadImagesAndLabels(Dataset):
         if not self.color_dir:
             raise RuntimeError(f'No input file found in {ycb_dir}, make sure you put your images there')
         if len(self.color_dir) != len(self.label_dir):
-            raise RuntimeError(f'Got {len(self.color_dir)} images but {len(self.label_dir)} labels, ')
-        logging.info(f'Creating dataset with {len(self.color_dir)} examples')
+            raise RuntimeError(f'Got {len(self.color_dir)} images but {len(self.label_dir)} labels')
+        # logging.info(f'New dataset created with {len(self.color_dir)} examples')
 
     def __len__(self):
         return len(self.color_dir)

@@ -2,6 +2,8 @@ import torch
 from torch import Tensor
 from torch.nn import BCEWithLogitsLoss, MSELoss
 import numpy as np
+import time
+
 
 # the nms function takes in a 2d array, a list of topk values and a list of topk indices
 # return the array, topk values topk indices after suppress the local non-max (2 pixels nearby)
@@ -16,7 +18,7 @@ def nms(array2d, values, indices):
             array2d[max(0, i[0] - 2): min(i[0] + 3, 479), max(0, i[1] - 2): min(i[1] + 3, 639)] = 0
             # set the middle value back
             array2d[i[0], i[1]] = value
-    values_new, indices_new = torch.topk(array2d.flatten(), torch.count_nonzero(array2d))
+    values_new, indices_new = torch.topk(array2d.flatten(), 500)
     indices_new = np.array(np.unravel_index(indices_new.detach().to("cpu").numpy(), array2d.shape)).T
 
     return array2d, values_new, indices_new
@@ -49,8 +51,9 @@ def keypoint_loss(preds, images, labels, device):
             max_values.append(gene_local_max)
 
         # need to divide by shape again since previous loss is calculated individually
-        max_values = torch.stack(max_values)
-        detect_loss += BCEL(max_values, torch.ones_like(max_values))
+        if max_values:
+            max_values = torch.stack(max_values)
+            detect_loss += BCEL(max_values, torch.ones_like(max_values))
 
         # Calculate loss by negative prediction results
         masked = (torch.sigmoid(gene_pred) > detect_threah) * gene_pred
@@ -62,14 +65,15 @@ def keypoint_loss(preds, images, labels, device):
         gene_des_pred = descriptors[i * 2 + 1, :, :]
         # Set all detection result smaller than threshold to 0
         real_masked = (torch.sigmoid(real_pred) > detect_threah) * real_pred
-        gene_masked = (torch.sigmoid(gene_pred) > detect_threah) * gene_pred
         # extra step to remove points in empty area
-        gene_masked = (gene_masked * (images[i * 2 + 1, 3, :, :] != 0)).to(device=device)
+        gene_masked = (gene_pred * (images[i * 2 + 1, 3, :, :] != 0)).to(device=device)
+        gene_masked = (torch.sigmoid(gene_masked) > detect_threah) * gene_masked
+
 
         # find all non-zero predictions, rank from highest to lowest and unravel for their index
-        v_r, i_r = torch.topk(real_masked.flatten(), torch.count_nonzero(real_masked))
+        v_r, i_r = torch.topk(real_masked.flatten(), 500)
         i_r = np.array(np.unravel_index(i_r.detach().to("cpu").numpy(), real_masked.shape)).T
-        v_g, i_g = torch.topk(gene_masked.flatten(), torch.count_nonzero(gene_masked))
+        v_g, i_g = torch.topk(gene_masked.flatten(), 500)
         i_g = np.array(np.unravel_index(i_g.detach().to("cpu").numpy(), gene_masked.shape)).T
 
         # Non-max suppression
@@ -89,6 +93,10 @@ def keypoint_loss(preds, images, labels, device):
             description_loss += MSE(torch.sigmoid(matches_r), torch.sigmoid(matches_g))
         else:
             pass
+        # t4 = time.time()
+        # print(f'found {len(v_r)} real points, {len(v_g)} gene points, {len(matches_r)} matches\n')
+        # print(f'the nms took {t3 - t2} seconds\n')
+        # print(f'the matching took {t4 - t3} seconds\n')
 
     return detect_weight * detect_loss + descrip_weight * description_loss
 
@@ -110,14 +118,14 @@ def keypoint_score(preds, images, labels, device):
         gene_des_pred = descriptors[i * 2 + 1, :, :]
         # Set all detection result smaller than threshold to 0
         real_masked = (torch.sigmoid(real_pred) > detect_threah) * real_pred
-        gene_masked = (torch.sigmoid(gene_pred) > detect_threah) * gene_pred
         # extra step to remove points in empty area
-        gene_masked = (gene_masked * (images[i * 2 + 1, 3, :, :] != 0)).to(device=device)
+        gene_masked = (gene_pred * (images[i * 2 + 1, 3, :, :] != 0)).to(device=device)
+        gene_masked = (torch.sigmoid(gene_masked) > detect_threah) * gene_masked
 
         # find all non-zero predictions, rank from highest to lowest and unravel for their index
-        v_r, i_r = torch.topk(real_masked.flatten(), torch.count_nonzero(real_masked))
+        v_r, i_r = torch.topk(real_masked.flatten(), 500) #torch.count_nonzero(real_masked)
         i_r = np.array(np.unravel_index(i_r.detach().to("cpu").numpy(), real_masked.shape)).T
-        v_g, i_g = torch.topk(gene_masked.flatten(), torch.count_nonzero(gene_masked))
+        v_g, i_g = torch.topk(gene_masked.flatten(), 500)
         i_g = np.array(np.unravel_index(i_g.detach().to("cpu").numpy(), gene_masked.shape)).T
 
         # Non-max suppression

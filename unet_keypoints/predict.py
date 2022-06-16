@@ -8,56 +8,88 @@ import torch.nn.functional as F
 from PIL import Image
 from torchvision import transforms
 
-from utils.data_loading import BasicDataset
 from unet import UNet
 from utils.utils import plot_img_and_mask
+import cv2
+from utils.data_loading import create_dataloader
+from tqdm import tqdm
+from pathlib import Path
+from datetime import datetime
+from utils.calc_loss import nms
+# datetime object containing current date and time
+now = datetime.now()
+# dd/mm/YY H:M
+dt_string = now.strftime("%Y-%m-%d_%H:%M")
 
-def predict_img(net,
-                full_img,
-                device,
-                scale_factor=1,
-                out_threshold=0.5):
-    net.eval()
-    img = torch.from_numpy(BasicDataset.preprocess(full_img, scale_factor, is_mask=False))
-    img = img.unsqueeze(0)
-    img = img.to(device=device, dtype=torch.float32)
+def process_pred(preds, threshold):
+    detectors = preds[:, 0, :, :]
+    descriptors = preds[:, 1:, :, :]
 
-    with torch.no_grad():
-        output = net(img)
+    real_pred = detectors[0, :, :]
+    gene_pred = detectors[1, :, :]
+    real_des_pred = torch.sigmoid(descriptors[0, :, :])
+    gene_des_pred = torch.sigmoid(descriptors[1, :, :])
+    # Set all detection result smaller than threshold to 0
+    real_masked = (torch.sigmoid(real_pred) > threshold) * real_pred
+    gene_masked = (torch.sigmoid(gene_pred) > threshold) * gene_pred
 
-        if net.n_classes > 1:
-            probs = F.softmax(output, dim=1)[0]
+    # find all non-zero predictions, rank from highest to lowest and unravel for their index
+    v_r, i_r = torch.topk(real_masked.flatten(), 500)
+    i_r = np.array(np.unravel_index(i_r.detach().to("cpu").numpy(), real_masked.shape)).T
+    v_g, i_g = torch.topk(gene_masked.flatten(), 500)
+    i_g = np.array(np.unravel_index(i_g.detach().to("cpu").numpy(), gene_masked.shape)).T
+
+    # Non-max suppression
+    real_masked, v_r, i_r = nms(real_masked, v_r, i_r)
+    gene_masked, v_g, i_g = nms(gene_masked, v_g, i_g)
+    matches_r, matches_g = [], []
+    for point_r in i_r:
+        des_r = real_des_pred[:, point_r[0], point_r[1]]
+        min_distance = 100
+        min_point_g = []
+        for point_g in i_g:
+            des_g = gene_des_pred[:, point_g[0], point_g[1]]
+            distance = torch.dist(des_r, des_g)
+            # max distance 16 (square root), 1.6 is 10% distance
+            if distance <= 1.6 and distance < min_distance:
+                min_distance = distance
+                min_point_g = point_g
+        if min_distance == 100:
+            pass
         else:
-            probs = torch.sigmoid(output)[0]
+            matches_r.append(point_r)
+            matches_g.append(min_point_g)
+    return matches_r, matches_g
 
-        tf = transforms.Compose([
-            transforms.ToPILImage(),
-            transforms.Resize((full_img.size[1], full_img.size[0])),
-            transforms.ToTensor()
-        ])
 
-        full_mask = tf(probs.cpu()).squeeze()
+def predict_img(dir_ycb, test_folder, output, threshold, net, device, save):
+    net.eval()
+    test_loader = create_dataloader(dir_ycb, 'test', test_folder, num_workers=8, pin_memory=True)
+    # for num, data in tqdm(enumerate(test_loader), total=len(test_loader)):
+    for num, data in enumerate(test_loader):
+        images = []
+        images.append((data[0])[0].get('real'))
+        images.append((data[0])[0].get('gene'))
+        images_T = torch.stack(images)
+        images_T = images_T.to(device=device, dtype=torch.float32)
 
-    if net.n_classes == 1:
-        return (full_mask > out_threshold).numpy()
-    else:
-        return F.one_hot(full_mask.argmax(dim=0), net.n_classes).permute(2, 0, 1).numpy()
+        with torch.no_grad():
+            preds = net(images_T)
+
+        matches_r, matches_g = process_pred(preds, threshold)
+        if save:
+            stop = 1
 
 
 def get_args():
     parser = argparse.ArgumentParser(description='Predict masks from input images')
-    parser.add_argument('--model', '-m', default='MODEL.pth', metavar='FILE',
+    parser.add_argument('--model', '-m', default='./checkpoints/2022-06-15_13:58/checkpoint_epoch1.pth', metavar='FILE',
                         help='Specify the file in which the model is stored')
-    parser.add_argument('--input', '-i', metavar='INPUT', nargs='+', help='Filenames of input images', required=True)
-    parser.add_argument('--output', '-o', metavar='OUTPUT', nargs='+', help='Filenames of output images')
-    parser.add_argument('--viz', '-v', action='store_true',
-                        help='Visualize the images as they are processed')
-    parser.add_argument('--no-save', '-n', action='store_true', help='Do not save the output masks')
-    parser.add_argument('--mask-threshold', '-t', type=float, default=0.5,
+    parser.add_argument('--save', '-s', action='store_true', help='Save the output images')
+    parser.add_argument('--threshold', '-t', type=float, default=0.7,
                         help='Minimum probability value to consider a mask pixel white')
-    parser.add_argument('--scale', '-s', type=float, default=0.5,
-                        help='Scale factor for the input images')
     parser.add_argument('--bilinear', action='store_true', default=False, help='Use bilinear upsampling')
+    parser.add_argument('--descriptors', '-c', type=int, default=256, help='Channels of descriptors')
 
     return parser.parse_args()
 
@@ -70,19 +102,16 @@ def get_output_filenames(args):
     return args.output or list(map(_generate_name, args.input))
 
 
-def mask_to_image(mask: np.ndarray):
-    if mask.ndim == 2:
-        return Image.fromarray((mask * 255).astype(np.uint8))
-    elif mask.ndim == 3:
-        return Image.fromarray((np.argmax(mask, axis=0) * 255 / mask.shape[0]).astype(np.uint8))
-
-
 if __name__ == '__main__':
     args = get_args()
-    in_files = args.input
-    out_files = get_output_filenames(args)
 
-    net = UNet(n_channels=3, n_classes=2, bilinear=args.bilinear)
+    # test_folders = ['0006', '0009', '0010', '0011', '0012', '0018', '0024', '0030', '0037', '0038', '0050',
+    # '0054', '0056', '0059', '0077', '0081', '0083', '0086', '0088']
+    test_folders = ['0006']
+    ycb_dir = Path('/data/Wanqing/YCB_Video_Dataset/')
+    out_dir = Path('./output')/dt_string
+
+    net = UNet(n_channels=4, n_descriptors=args.descriptors, bilinear=args.bilinear)
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     logging.info(f'Loading model {args.model}')
@@ -93,22 +122,9 @@ if __name__ == '__main__':
 
     logging.info('Model loaded!')
 
-    for i, filename in enumerate(in_files):
-        logging.info(f'\nPredicting image {filename} ...')
-        img = Image.open(filename)
-
-        mask = predict_img(net=net,
-                           full_img=img,
-                           scale_factor=args.scale,
-                           out_threshold=args.mask_threshold,
-                           device=device)
-
-        if not args.no_save:
-            out_filename = out_files[i]
-            result = mask_to_image(mask)
-            result.save(out_filename)
-            logging.info(f'Mask saved to {out_filename}')
-
-        if args.viz:
-            logging.info(f'Visualizing results for image {filename}, close to continue...')
-            plot_img_and_mask(img, mask)
+    for i, filename in enumerate(test_folders):
+        logging.info(f'\n Processing folder {ycb_dir}/{filename} ...')
+        out = out_dir/filename
+        file = []
+        file.append(filename)
+        predict_img(ycb_dir, file, out, args.threshold, net=net, device=device, save=args.save)
