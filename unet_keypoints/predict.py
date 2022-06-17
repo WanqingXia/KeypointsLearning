@@ -43,6 +43,7 @@ def process_pred(preds, threshold):
     real_masked, v_r, i_r = nms(real_masked, v_r, i_r)
     gene_masked, v_g, i_g = nms(gene_masked, v_g, i_g)
     matches_r, matches_g = [], []
+
     for point_r in i_r:
         des_r = real_des_pred[:, point_r[0], point_r[1]]
         min_distance = 100
@@ -78,14 +79,23 @@ def predict_img(dir_ycb, test_folder, output, threshold, net, device, save):
 
         matches_r, matches_g = process_pred(preds, threshold)
         if save:
-            stop = 1
+            dir_r = data[2][0]
+            dir_g = data[3][0]
+            out_dir = output / dir_r.name.replace('color', 'result')
+            image_r = cv2.imread(str(dir_r))
+            image_g = cv2.imread(str(dir_g))
+            out_img = np.concatenate((image_r, image_g), axis=1)
+            for point_r, point_g in zip(matches_r[:50], matches_g[:50]):
+                out_img = cv2.line(out_img, (point_r[1], point_r[0]), (point_g[1] + image_r.shape[1], point_g[0]),
+                                   (0, 255, 0), 1)
+            cv2.imwrite(str(out_dir), out_img)
 
 
 def get_args():
     parser = argparse.ArgumentParser(description='Predict masks from input images')
     parser.add_argument('--model', '-m', default='./checkpoints/2022-06-15_13:58/checkpoint_epoch1.pth', metavar='FILE',
                         help='Specify the file in which the model is stored')
-    parser.add_argument('--save', '-s', action='store_true', help='Save the output images')
+    parser.add_argument('--save', '-s', action='store_true', default=True, help='Save the output images')
     parser.add_argument('--threshold', '-t', type=float, default=0.7,
                         help='Minimum probability value to consider a mask pixel white')
     parser.add_argument('--bilinear', action='store_true', default=False, help='Use bilinear upsampling')
@@ -125,6 +135,7 @@ if __name__ == '__main__':
     for i, filename in enumerate(test_folders):
         logging.info(f'\n Processing folder {ycb_dir}/{filename} ...')
         out = out_dir/filename
+        out.mkdir(parents=True, exist_ok=True)
         file = []
         file.append(filename)
         predict_img(ycb_dir, file, out, args.threshold, net=net, device=device, save=args.save)
