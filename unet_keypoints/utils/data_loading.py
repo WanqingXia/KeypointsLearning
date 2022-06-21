@@ -141,6 +141,7 @@ class LoadImagesAndLabels(Dataset):
         real_dep = self.load_process(real_dep)
         gen_img = self.load_process(gen_img)
         gen_dep = self.load_process(gen_dep)
+        # label has 4 cols, [real_row, real_col, gene_row, gene_col]
         label = self.load_process(label)
 
         real_dep = real_dep[None, :, :]

@@ -109,10 +109,11 @@ def label(folder_name, gen_folder_name, sift, fast, bf):
 
         save_points = np.zeros((len(matches_f)+len(kp_fn), 4))
         for num, match in enumerate(matches_f):
-            save_points[num, 0] = int(keypoints_f[match.trainIdx].pt[1])
-            save_points[num, 1] = int(keypoints_f[match.trainIdx].pt[0])
-            save_points[num, 2] = int(keypoints_r[match.queryIdx].pt[1])
-            save_points[num, 3] = int(keypoints_r[match.queryIdx].pt[0])
+            # trainidx: generated queryidx: real
+            save_points[num, 0] = int(keypoints_f[match.queryIdx].pt[1]) #real_row
+            save_points[num, 1] = int(keypoints_f[match.queryIdx].pt[0]) #real_col
+            save_points[num, 2] = int(keypoints_r[match.trainIdx].pt[1]) #gene_row
+            save_points[num, 3] = int(keypoints_r[match.trainIdx].pt[0]) #gene_col
         pre_num = len(matches_f)
         for count in range(len(kp_fn)):
             cur_pos = pre_num + count
@@ -135,14 +136,20 @@ def label(folder_name, gen_folder_name, sift, fast, bf):
         # code for visualising the keypoints
         # img1 = plt.imread(color_f)
         # img2 = plt.imread(color_r)
+        # out_img = np.concatenate((img1, img2), axis=1)
         # for line in save_points_n:
         #     img1[line[0]-2:line[0]+3, line[1]-2: line[1]+3, :] = [0, 1, 0]
         #     img2[line[2]-2:line[2]+3, line[3]-2: line[3]+3, :] = [0, 1, 0]
+        #     out_img = cv2.line(out_img, (line[0], line[1]), (line[2] + img1.shape[1], line[3]),
+        #                        (0, 255, 0), 1)
         # plt.figure()
         # plt.imshow(img1)
         # plt.figure()
         # plt.imshow(img2)
+        # plt.figure()
+        # plt.imshow(out_img)
         # plt.show()
+        # stop = 1
 
 if __name__ == "__main__":
     data_folder = "/data/Wanqing/YCB_Video_Dataset/data"
