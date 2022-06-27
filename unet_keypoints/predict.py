@@ -7,7 +7,7 @@ import torch
 import torch.nn.functional as F
 from PIL import Image
 from torchvision import transforms
-
+from time import time
 from unet import UNet
 from utils.utils import plot_img_and_mask
 import cv2
@@ -22,6 +22,7 @@ now = datetime.now()
 dt_string = now.strftime("%Y-%m-%d_%H:%M")
 
 def process_pred(preds, threshold):
+    tic = time()
     detectors = preds[:, 0, :, :]
     descriptors = preds[:, 1:, :, :]
 
@@ -34,9 +35,9 @@ def process_pred(preds, threshold):
     gene_masked = (torch.sigmoid(gene_pred) > threshold) * gene_pred
 
     # find all non-zero predictions, rank from highest to lowest and unravel for their index
-    v_r, i_r = torch.topk(real_masked.flatten(), 500)
+    v_r, i_r = torch.topk(real_masked.flatten(), 200)
     i_r = np.array(np.unravel_index(i_r.detach().to("cpu").numpy(), real_masked.shape)).T
-    v_g, i_g = torch.topk(gene_masked.flatten(), 500)
+    v_g, i_g = torch.topk(gene_masked.flatten(), 200)
     i_g = np.array(np.unravel_index(i_g.detach().to("cpu").numpy(), gene_masked.shape)).T
 
     # Non-max suppression
@@ -60,6 +61,8 @@ def process_pred(preds, threshold):
         else:
             matches_r.append(point_r)
             matches_g.append(min_point_g)
+    toc = time()
+    print(f'the process took {toc-tic} seconds')
     return matches_r, matches_g
 
 
@@ -85,7 +88,7 @@ def predict_img(dir_ycb, test_folder, output, threshold, net, device, save):
             image_r = cv2.imread(str(dir_r))
             image_g = cv2.imread(str(dir_g))
             out_img = np.concatenate((image_r, image_g), axis=1)
-            for point_r, point_g in zip(matches_r[:50], matches_g[:50]):
+            for point_r, point_g in zip(matches_r, matches_g):
                 out_img = cv2.line(out_img, (point_r[1], point_r[0]), (point_g[1] + image_r.shape[1], point_g[0]),
                                    (0, 255, 0), 1)
             cv2.imwrite(str(out_dir), out_img)
@@ -93,7 +96,7 @@ def predict_img(dir_ycb, test_folder, output, threshold, net, device, save):
 
 def get_args():
     parser = argparse.ArgumentParser(description='Predict masks from input images')
-    parser.add_argument('--model', '-m', default='./checkpoints/2022-06-15_13:58/checkpoint_epoch1.pth', metavar='FILE',
+    parser.add_argument('--model', '-m', default='./checkpoints/2022-06-23_17:52/checkpoint_epoch1.pth', metavar='FILE',
                         help='Specify the file in which the model is stored')
     parser.add_argument('--save', '-s', action='store_true', default=True, help='Save the output images')
     parser.add_argument('--threshold', '-t', type=float, default=0.7,

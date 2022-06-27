@@ -69,7 +69,7 @@ def train_net(net,
         epoch_loss = 0
 
         # create dataloader for training, randomly sampled from the pool
-        train_loader = create_dataloader(dir_ycb, 'train', test_folders, batch_size=batch_size,
+        train_loader = create_dataloader(dir_ycb, 'train', test_folders, batch_size=batch_size, augment=True,
                                          sample_num=train_size, num_workers=8, pin_memory=True)
         pbar = tqdm(enumerate(train_loader), total=len(train_loader), desc=f'Training epoch {epoch}/{epochs}', unit='batch')
         for num, batch in pbar:
@@ -89,7 +89,7 @@ def train_net(net,
 
             with torch.cuda.amp.autocast(enabled=amp):
                 points_pred = net(images_T)
-                loss = keypoint_loss(points_pred, images_T, labels, device=device)
+                loss, det_loss, desc_loss, dis_loss, qua_loss = keypoint_loss(points_pred, images_T, labels, device=device)
 
             optimizer.zero_grad(set_to_none=True)
             grad_scaler.scale(loss).backward()
@@ -99,7 +99,11 @@ def train_net(net,
             global_step += 1
             epoch_loss += loss.item()
             experiment.log({
-                'train loss': loss.item(),
+                'total loss': loss.item(),
+                'detect loss': det_loss.item(),
+                'description loss': desc_loss.item(),
+                'distance loss': dis_loss.item(),
+                'quantity loss': qua_loss.item(),
                 'step': global_step,
                 'epoch': epoch
             })

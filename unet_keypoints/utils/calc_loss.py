@@ -32,6 +32,8 @@ def keypoint_loss(preds, images, labels, device):
     descrip_weight = 0.05 # weight of the description loss loss
     detect_loss = torch.tensor(0, dtype=torch.float32, device=device)
     description_loss = torch.tensor(0, dtype=torch.float32, device=device)
+    distance_loss = torch.tensor(0, dtype=torch.float32, device=device)
+    quantity_loss = torch.tensor(0, dtype=torch.float32, device=device)
 
     detectors = preds[:, 0, :, :]
     descriptors = preds[:, 1:, :, :]
@@ -56,9 +58,9 @@ def keypoint_loss(preds, images, labels, device):
             detect_loss += BCEL(max_values, torch.ones_like(max_values))
 
         # Calculate loss by negative prediction results
-        masked = (torch.sigmoid(gene_pred) > detect_threah) * gene_pred
-        masked = (masked * (images[i * 2 + 1, 3, :, :] == 0)).to(device=device)
-        detect_loss += BCEL(masked, torch.zeros_like(masked))
+        # masked = (torch.sigmoid(gene_pred) > detect_threah) * gene_pred
+        # masked = (masked * (images[i * 2 + 1, 3, :, :] == 0)).to(device=device)
+        # detect_loss += BCEL(masked, torch.zeros_like(masked))
 
         # Calculate loss by matching descriptors
         real_des_pred = descriptors[i * 2, :, :]
@@ -91,14 +93,22 @@ def keypoint_loss(preds, images, labels, device):
             matches_r = torch.stack(matches_r).to(device=device)
             matches_g = torch.stack(matches_g).to(device=device)
             description_loss += MSE(torch.sigmoid(matches_r), torch.sigmoid(matches_g))
+            distance_loss += 1 / MSE(torch.sigmoid(matches_r), torch.sigmoid(torch.flip(matches_r, dims=(0,))))
+            distance_loss += 1 / MSE(torch.sigmoid(matches_g), torch.sigmoid(torch.flip(matches_g, dims=(0,))))
+            quantity_loss += 1 / len(matches_r)
         else:
-            pass
+            # apply the empty loss when no keypoint pairs can be found
+            quantity_loss += 0.25
         # t4 = time.time()
         # print(f'found {len(v_r)} real points, {len(v_g)} gene points, {len(matches_r)} matches\n')
         # print(f'the nms took {t3 - t2} seconds\n')
         # print(f'the matching took {t4 - t3} seconds\n')
+    detect_loss = detect_loss * 1
+    description_loss = description_loss * 1
+    distance_loss = distance_loss * 0.001
+    quantity_loss = quantity_loss * 1
 
-    return detect_weight * detect_loss + descrip_weight * description_loss
+    return detect_loss+description_loss+distance_loss+quantity_loss, detect_loss, description_loss, distance_loss, quantity_loss
 
 def keypoint_score(preds, images, labels, device):
     MSE = MSELoss(reduction='mean')
@@ -111,7 +121,6 @@ def keypoint_score(preds, images, labels, device):
     for i, label in enumerate(labels):
         real_pred = detectors[i * 2, :, :]
         gene_pred = detectors[i * 2 + 1, :, :]
-        label = label[label.sum(axis=1) != 0].detach().cpu().numpy().astype(int)
 
         # Calculate loss by matching descriptors
         real_des_pred = descriptors[i * 2, :, :]

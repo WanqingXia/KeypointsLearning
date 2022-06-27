@@ -8,17 +8,19 @@ from pathlib import Path
 import numpy as np
 import torch
 from PIL import Image
+import PIL
 from torch.utils.data import Dataset, DataLoader, random_split
 import glob
 import torch.distributed as dist
 from contextlib import contextmanager
+import random
 
 
-def create_dataloader(ycb_dir, d_type, test_folders, batch_size=1,
+def create_dataloader(ycb_dir, d_type, test_folders, batch_size=1, augment=False,
                       sample_num=0, rank=-1, num_workers=8, pin_memory=True):
     # Make sure only the first process in DDP process the dataset first, and the following others can use the cache
     with torch_distributed_zero_first(rank):
-        dataset = LoadImagesAndLabels(ycb_dir, d_type, test_folders)
+        dataset = LoadImagesAndLabels(ycb_dir, d_type, test_folders, augment=augment)
 
     if d_type == "train":
         if sample_num == 0:
@@ -65,10 +67,11 @@ def create_dataloader(ycb_dir, d_type, test_folders, batch_size=1,
 
 
 class LoadImagesAndLabels(Dataset):
-    def __init__(self, ycb_dir: str, d_type: str, test_folders: list):
+    def __init__(self, ycb_dir: str, d_type: str, test_folders: list, augment=False):
         self.real_dir = ycb_dir / 'data'
         self.gen_dir = ycb_dir / 'data_gen'
         self.type = d_type
+        self.augment = augment
         self.real_folders = sorted(listdir(self.real_dir))
         self.gen_folders = sorted(listdir(self.gen_dir))
         self.color_dir = []
@@ -106,14 +109,33 @@ class LoadImagesAndLabels(Dataset):
             label_list.append(label.split('data_gen/')[-1])
 
     @staticmethod
-    def load_process(filename):
+    def augment_img(image):
+        # no hue gain since we don't want to change the actually color, only brightness to mimic lighting condition
+        bright_gain = random.uniform(0.5, 2.0) # saturation gain
+        contrast_gain = random.uniform(0.5, 2.0) # value gain
+
+        # adjust the brightness
+        img_b = PIL.ImageEnhance.Brightness(image).enhance(bright_gain)
+        # adjust the contrast
+        img_bc = PIL.ImageEnhance.Contrast(img_b).enhance(contrast_gain)
+
+        return img_bc
+
+    def load_process(self, filename):
         file_type = filename.stem.split('-')[-1]
         # numpy image: H x W x C
         # torch image: C x H x W
         if file_type == 'color':
-            data = np.array(Image.open(filename)).astype("uint8")
-            data = (data.transpose((2, 0, 1))/255).astype(np.float32)
-            return torch.as_tensor(data).float().contiguous()
+            if self.augment:
+                real_img = Image.open(filename)
+                real_img = self.augment_img(real_img)
+                data = np.array(real_img).astype("uint8")
+                data = (data.transpose((2, 0, 1))/255).astype(np.float32)
+                return torch.as_tensor(data).float().contiguous()
+            else:
+                data = np.array(Image.open(filename)).astype("uint8")
+                data = (data.transpose((2, 0, 1))/255).astype(np.float32)
+                return torch.as_tensor(data).float().contiguous()
         elif file_type == 'depth':
             data = np.array(Image.open(filename)).astype("uint16")
             data = (data/10000).astype(np.float32)
@@ -121,6 +143,7 @@ class LoadImagesAndLabels(Dataset):
         elif file_type == 'np':
             data = np.array(np.load(filename)).astype(np.float32)
             return data
+
 
     def __getitem__(self, idx):
         name = self.color_dir[idx]
