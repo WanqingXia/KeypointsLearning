@@ -7,7 +7,7 @@ from pathlib import Path
 
 import numpy as np
 import torch
-from PIL import Image
+from PIL import Image, ImageEnhance
 import PIL
 from torch.utils.data import Dataset, DataLoader, random_split
 import glob
@@ -115,9 +115,9 @@ class LoadImagesAndLabels(Dataset):
         contrast_gain = random.uniform(0.5, 2.0) # value gain
 
         # adjust the brightness
-        img_b = PIL.ImageEnhance.Brightness(image).enhance(bright_gain)
+        img_b = ImageEnhance.Brightness(image).enhance(bright_gain)
         # adjust the contrast
-        img_bc = PIL.ImageEnhance.Contrast(img_b).enhance(contrast_gain)
+        img_bc = ImageEnhance.Contrast(img_b).enhance(contrast_gain)
 
         return img_bc
 
