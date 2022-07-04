@@ -2,7 +2,7 @@ import argparse
 import logging
 import sys
 from pathlib import Path
-
+import math
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -15,6 +15,7 @@ from utils.data_loading import create_dataloader
 from utils.calc_loss import keypoint_loss
 from evaluate import evaluate
 from unet import UNet
+from utils.utils import one_cycle, plot_lr_scheduler
 import time
 
 from datetime import datetime
@@ -39,12 +40,13 @@ def train_net(net,
               val_size: int = 100,
               learning_rate: float = 1e-5,
               save_checkpoint: bool = True,
-              amp: bool = False):
+              amp: bool = False,
+              adam: bool = False):
 
     # 1. Initialize logging
     experiment = wandb.init(project='U-Net', resume='allow', anonymous='must')
     experiment.config.update(dict(epochs=epochs, batch_size=batch_size, learning_rate=learning_rate,
-                                  save_checkpoint=save_checkpoint, amp=amp))
+                                  save_checkpoint=save_checkpoint, amp=amp, adam=adam))
 
     logging.info(f'''Starting training:
         Epochs:          {epochs}
@@ -55,11 +57,19 @@ def train_net(net,
         Checkpoints:     {save_checkpoint}
         Device:          {device.type}
         Mixed Precision: {amp}
+        Optimizer:       {adam}
     ''')
 
     # 2. Set up the optimizer, the learning rate scheduler and the loss scaling for AMP
-    optimizer = optim.RMSprop(net.parameters(), lr=learning_rate, weight_decay=1e-8, momentum=0.9)
-    scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'max', patience=2)  # goal: maximize Dice score
+    if adam:
+        optimizer = optim.Adam(net.parameters(), lr=learning_rate, weight_decay=1e-8, betas=(0.94, 0.999))
+        lf = one_cycle(1, 0.001, epochs)
+        scheduler = optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=lf)
+        # plot_lr_scheduler(optimizer, scheduler, epochs)
+    else:
+        optimizer = optim.RMSprop(net.parameters(), lr=learning_rate, weight_decay=1e-8, momentum=0.9)
+        scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'max', patience=2)  # goal: maximize Dice score
+
     grad_scaler = torch.cuda.amp.GradScaler(enabled=amp)
     global_step = 0
 
@@ -89,7 +99,7 @@ def train_net(net,
 
             with torch.cuda.amp.autocast(enabled=amp):
                 points_pred = net(images_T)
-                loss, det_loss, desc_loss, dis_loss, qua_loss = keypoint_loss(points_pred, images_T, labels, device=device)
+                loss, det_loss, trip_loss, qua_loss = keypoint_loss(points_pred, images_T, labels, device=device)
 
             optimizer.zero_grad(set_to_none=True)
             grad_scaler.scale(loss).backward()
@@ -101,8 +111,7 @@ def train_net(net,
             experiment.log({
                 'total loss': loss.item(),
                 'detect loss': det_loss.item(),
-                'description loss': desc_loss.item(),
-                'distance loss': dis_loss.item(),
+                'triplet loss': trip_loss.item(),
                 'quantity loss': qua_loss.item(),
                 'step': global_step,
                 'epoch': epoch
@@ -121,7 +130,10 @@ def train_net(net,
             histograms['Gradients/' + tag] = wandb.Histogram(value.grad.data.cpu())
 
         val_score = evaluate(net, val_loader, device, epoch, epochs)
-        scheduler.step(val_score)
+        if adam:
+            scheduler.step()
+        else:
+            scheduler.step(val_score)
 
         logging.info('Validation Score: {}'.format(val_score))
         experiment.log({
@@ -142,15 +154,15 @@ def get_args():
     parser = argparse.ArgumentParser(description='Train the UNet on images and target masks')
     parser.add_argument('--epochs', '-e', metavar='E', type=int, default=30, help='Number of epochs')
     parser.add_argument('--batch-size', '-b', dest='batch_size', metavar='B', type=int, default=4, help='Batch size')
-    parser.add_argument('--train', '-t', dest='train_size', type=int, default=4000, help='Training size per epoch')
-    parser.add_argument('--val', '-v', dest='val_size', type=int, default=2000, help='validation size per epoch')
+    parser.add_argument('--train', '-t', dest='train_size', type=int, default=1000, help='Training size per epoch')
+    parser.add_argument('--val', '-v', dest='val_size', type=int, default=1000, help='validation size per epoch')
     parser.add_argument('--learning-rate', '-l', metavar='LR', type=float, default=1e-5,
                         help='Learning rate', dest='lr')
     parser.add_argument('--load', '-f', type=str, default=False, help='Load model from a .pth file')
     parser.add_argument('--amp', action='store_true', default=True, help='Use mixed precision')
     parser.add_argument('--bilinear', action='store_true', default=False, help='Use bilinear upsampling')
     parser.add_argument('--descriptors', '-d', type=int, default=256, help='Channels of descriptors')
-
+    parser.add_argument('--adam', '-a', type=bool, default=True, help='Use Adam optimizer and cosine scheduler')
     return parser.parse_args()
 
 
@@ -185,7 +197,8 @@ if __name__ == '__main__':
                   val_size=args.val_size,
                   learning_rate=args.lr,
                   device=device,
-                  amp=args.amp)
+                  amp=args.amp,
+                  adam=args.adam)
     except KeyboardInterrupt:
         torch.save(net.state_dict(), 'INTERRUPTED.pth')
         logging.info('Saved interrupt')
