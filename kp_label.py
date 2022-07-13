@@ -29,7 +29,6 @@ def label(folder_name, gen_folder_name, sift, fast, bf):
         depth_img_f = Image.fromarray(np.array(Image.open(depth_f)).astype("uint16"))
         depth_img_f = (np.asarray(depth_img_f)/10000).astype(np.float32)
 
-
         '''
         Calculating colour image keypoints with sift
         '''
@@ -152,10 +151,10 @@ def label(folder_name, gen_folder_name, sift, fast, bf):
         # stop = 1
 
 if __name__ == "__main__":
-    data_folder = "/data/Wanqing/YCB_Video_Dataset/data"
-    data_gen_folder = "/data/Wanqing/YCB_Video_Dataset/data_gen"
-    data_paths = sorted(os.listdir(data_folder))
-    data_gen_paths = sorted(os.listdir(data_gen_folder))
+    data_real_folder = "/data/Wanqing/YCB_Video_Dataset/data"
+    data_gene_folder = "/data/Wanqing/YCB_Video_Dataset/data_gen"
+    data_paths = sorted(os.listdir(data_real_folder))
+    data_gen_paths = sorted(os.listdir(data_gene_folder))
 
     # sift
     sift = cv2.SIFT_create()
@@ -165,9 +164,9 @@ if __name__ == "__main__":
     bf = cv2.BFMatcher(cv2.NORM_L1, crossCheck=True)
 
     for num, name in enumerate(data_paths):
-        data_paths[num] = os.path.join(data_folder, name)
+        data_paths[num] = os.path.join(data_real_folder, name)
     for num, name in enumerate(data_gen_paths):
-        data_gen_paths[num] = os.path.join(data_gen_folder, name)
+        data_gen_paths[num] = os.path.join(data_gene_folder, name)
     for folder_name, gen_folder_name in zip(data_paths, data_gen_paths):
         label(folder_name, gen_folder_name, sift, fast, bf)
 

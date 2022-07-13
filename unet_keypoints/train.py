@@ -12,7 +12,7 @@ from torchsummary import summary
 from tqdm import tqdm
 
 from utils.data_loading import create_dataloader
-from utils.calc_loss import keypoint_loss
+from utils.calc_loss import keypoint_loss, new_loss
 from evaluate import evaluate
 from unet import UNet
 from utils.utils import one_cycle, plot_lr_scheduler
@@ -99,7 +99,7 @@ def train_net(net,
 
             with torch.cuda.amp.autocast(enabled=amp):
                 points_pred = net(images_T)
-                loss, det_loss, trip_loss, qua_loss = keypoint_loss(points_pred, images_T, labels, device=device)
+                loss, det_loss, trip_loss, qua_loss = new_loss(points_pred, images_T, labels, device=device)
 
             optimizer.zero_grad(set_to_none=True)
             grad_scaler.scale(loss).backward()
@@ -112,7 +112,9 @@ def train_net(net,
                 'total loss': loss.item(),
                 'detect loss': det_loss.item(),
                 'triplet loss': trip_loss.item(),
-                'quantity loss': qua_loss.item(),
+                'quantity': qua_loss[0],
+                'gene keypoint num': qua_loss[1],
+                'real keypoint num': qua_loss[2],
                 'step': global_step,
                 'epoch': epoch
             })

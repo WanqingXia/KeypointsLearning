@@ -13,13 +13,12 @@ import png
 # debugpy.listen(5678)
 # debugpy.wait_for_client()
 
-
 def render(folder_name, model_paths, out_folder, count):
     bproc.init()
     light = bproc.types.Light()
 
     # create output folder
-    out_subfolder = os.path.join(out_folder,folder_name.split("/")[-1] )
+    out_subfolder = os.path.join(out_folder, folder_name.split("/")[-1])
     if os.path.exists(out_subfolder):
         # return a number to protect generated contents
         return 1
@@ -58,7 +57,9 @@ def render(folder_name, model_paths, out_folder, count):
                 # Calculate translation in world
                 pose_n[:, 3] = np.matmul(cam2world, pose_n[:, 3])
                 # Calculate rotation in world
-                pose_n[0:3, 0:3] = np.matmul(cam2world[0:3,0:3], pose[:, 0:3])
+                pose_n[0:3, 0:3] = np.matmul(cam2world[0:3, 0:3], pose[:, 0:3])
+                # cclM = [[np.cos(0.5), -np.sin(0.5), 0, 0], [np.sin(0.5), np.cos(0.5), 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]]
+                # pose_n = np.matmul(M, pose_n)
                 object.set_local2world_mat(pose_n)
 
         # Set camera intrinsics with K matrix
@@ -78,16 +79,16 @@ def render(folder_name, model_paths, out_folder, count):
         # reset the scene (clear the camera and light)
         bproc.utility.reset_keyframes()
 
-        with h5py.File(os.path.join(out_subfolder, (str(num) + '/0.hdf5')),'r') as h5f:
+        with h5py.File(os.path.join(out_subfolder, (str(num) + '/0.hdf5')), 'r') as h5f:
             print(os.path.join(out_subfolder, (str(num) + '/0.hdf5')))
-            colour_file = os.path.join(out_subfolder, (name.split("/")[-1].split("-")[0]+ "-color.png"))
+            colour_file = os.path.join(out_subfolder, (name.split("/")[-1].split("-")[0] + "-color.png"))
             print(colour_file)
 
-            depth_file = os.path.join(out_subfolder, (name.split("/")[-1].split("-")[0]+ "-depth.png"))
+            depth_file = os.path.join(out_subfolder, (name.split("/")[-1].split("-")[0] + "-depth.png"))
             print(depth_file)
-            colours = np.array(h5f["colors"])[...,::-1].copy()
-            cv2.imwrite(colour_file,colours)
-            with open((depth_file), 'wb') as im:
+            colours = np.array(h5f["colors"])[..., ::-1].copy()
+            cv2.imwrite(colour_file, colours)
+            with open(depth_file, 'wb') as im:
                 float_arr = np.array(h5f["depth"])
                 mask = np.array(h5f["depth"]) < 100
                 int_arr = float_arr*mask*10000
@@ -102,7 +103,8 @@ if __name__ == "__main__":
 
     data_folder = "/data/Wanqing/YCB_Video_Dataset/data"
     model_folder = "/data/Wanqing/YCB_Video_Dataset/models"
-    out_folder = "/data/Wanqing/YCB_Video_Dataset/data_gen"
+    # using a wrong file to protect generated files
+    out_folder = "/data/Wanqing/YCB_Video_Dataset/data_gen_n"
     data_paths = sorted(os.listdir(data_folder))
     model_paths = sorted(os.listdir(model_folder))
     for num, name in enumerate(data_paths):
@@ -112,7 +114,6 @@ if __name__ == "__main__":
 
     if os.path.exists(out_folder):
         pass
-        # shutil.rmtree(out_folder)
     else:
         os.mkdir(out_folder)
 

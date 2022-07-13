@@ -36,10 +36,7 @@ def get_path_and_length(file, filepaths, diag_length):
 def create_output_path(filepath, output_folder):
     obj_name = filepath.split("/")[-2]
     out_parent = os.path.join(output_folder, obj_name)
-    out_colour = os.path.join(out_parent, "colour")
-    out_depth = os.path.join(out_parent, "depth")
-    out_mask = os.path.join(out_parent, "mask")
-    out_matrix = os.path.join(out_parent, "matrix")
+
     if os.path.exists(output_folder)==False:
         os.mkdir(output_folder)
 
@@ -47,16 +44,13 @@ def create_output_path(filepath, output_folder):
         shutil.rmtree(out_parent, onerror=handler)
 
     os.mkdir(out_parent)
-    os.mkdir(out_colour)
-    os.mkdir(out_depth)
-    os.mkdir(out_mask)
-    os.mkdir(out_matrix)
-    return out_parent, out_colour, out_depth, out_mask, out_matrix
+
+    return out_parent
 
 # Sample camera points and save to txt
 def sample_points(path, radius, sample):
     points = [[0, 0, 0] for _ in range(sample)]
-    for n in range(sample):formula
+    for n in range(sample): #formula
         phi = np.arccos(-1.0 + (2.0 * (n + 1) - 1.0) / sample)
         theta = np.sqrt(sample * np.pi) * phi
         points[n][0] = radius * np.cos(theta) * np.sin(phi)
@@ -68,9 +62,10 @@ def sample_points(path, radius, sample):
     np.savetxt(savepath, points, fmt='%1.4f')
     return savepath
 
-# The core function for rendering images, render a colour and depth image
-# for each camera location
-def render(obj_path, pos_file, parent_path, colour_path, depth_path, mask_path, matrix_path, count):
+
+def render(obj_path, pos_file, save_path, count):
+    # The core function for rendering images, render a colour and depth image
+    # for each camera location
     bproc.init()
 
     # load the objects into the scene
@@ -113,26 +108,26 @@ def render(obj_path, pos_file, parent_path, colour_path, depth_path, mask_path, 
             data = bproc.renderer.render()
 
             # write the data to a .hdf5 container
-            bproc.writer.write_hdf5(os.path.join(parent_path, str(num)), data)
+            bproc.writer.write_hdf5(os.path.join(save_path, str(num)), data)
 
             # reset the scene (clear the camera and light)
             bproc.utility.reset_keyframes()
 
-            with h5py.File(os.path.join(parent_path, str(num),'0.hdf5'),'r') as h5f:
-                    colours = np.array(h5f["colors"])[...,::-1].copy()
-                    cv2.imwrite(os.path.join(colour_path, f'colour_img_{num}.jpg'),colours)
-                    with open(os.path.join(depth_path, f'depth_{num}.png'), 'wb') as im:
+            with h5py.File(os.path.join(save_path, str(num), '0.hdf5'), 'r') as h5f:
+                    colours = np.array(h5f["colors"])[..., ::-1].copy()
+                    cv2.imwrite(os.path.join(save_path, f'color-{num}.jpg'), colours)
+                    with open(os.path.join(save_path, f'depth-{num}.png'), 'wb') as im:
                             float_arr = np.array(h5f["depth"])
                             mask = np.array(h5f["depth"]) < 100
                             int_arr = float_arr*mask*10000
                             writer = png.Writer(width=640, height=480, bitdepth=16, greyscale=True)
                             writer.write(im, int_arr.astype(np.int16))
-                    # with open(os.path.join(mask_path, f'mask_{num}'), 'wb') as dat:
+                    # with open(os.path.join(mask_path, f'mask-{num}'), 'wb') as dat:
                             # savearr = np.array(h5f["depth"]) < 100
                             # np.save(dat, savearr)
-                    with open(os.path.join(matrix_path, f'matrix_{num}'), 'wb') as dat:
+                    with open(os.path.join(save_path, f'matrix-{num}'), 'wb') as dat:
                             np.save(dat, cam2world_matrix)
-            shutil.rmtree(os.path.join(parent_path, str(num)))
+            shutil.rmtree(os.path.join(save_path, str(num)))
 
     return count+1
 
@@ -143,8 +138,7 @@ if __name__ == "__main__":
     count = 0
 
     for obj_path, length in zip(filepaths, diag_length):
-        parent_path, colour_path, depth_path, mask_path, matrix_path = create_output_path(obj_path, output_folder="/data/Wanqing/YCB_Video_Dataset/YCB_objects")
-        pos_file = sample_points(parent_path, radius=length*3, sample=400)
-        count = render(obj_path, pos_file, parent_path, colour_path, depth_path, mask_path,matrix_path, count)
-
-
+        # using a wrong file to protect generated files
+        save_path = create_output_path(obj_path, output_folder="/data/Wanqing/YCB_Video_Dataset/YCB_objectsN")
+        pos_file = sample_points(save_path, radius=length*3, sample=400)
+        count = render(obj_path, pos_file, save_path, count)

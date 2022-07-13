@@ -5,6 +5,11 @@ from PIL import Image
 import PIL
 import matplotlib.pyplot as plt
 import glob
+"""
+
+This code is currently not working, doesn't do anything
+
+"""
 
 data_folder = "/data/Wanqing/YCB_Video_Dataset/data_gen"
 data_paths = sorted(os.listdir(data_folder))

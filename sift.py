@@ -5,6 +5,12 @@ import numpy as np
 from tqdm import tqdm
 import open3d as o3d
 
+"""
+
+This code is currently not working, doesn't do anything
+
+"""
+
 def calc_angels(object_folder, position_file, neighbour_file):
     num_lines = sum(1 for line in open(position_file))
     lines = np.zeros((num_lines, 3))
